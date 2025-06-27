@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 // MoveBehaviour inherits from GenericBehaviour. This class corresponds to basic walk and run behaviour, it is the default behaviour.
 public class MoveBehaviour : GenericBehaviour
@@ -11,6 +12,9 @@ public class MoveBehaviour : GenericBehaviour
 	public float jumpHeight = 1.5f;                 // Default jump height.
 	public float jumpInertialForce = 10f;          // Default horizontal inertial force when jumping.
 
+	//public float jumpPadSpeed = 10f;
+	private bool onJumpPad = false;
+	
 	private float speed, speedSeeker;               // Moving speed.
 	private int jumpBool;                           // Animator variable related to jumping.
 	private int groundedBool;                       // Animator variable related to whether or not the player is on ground.
@@ -49,8 +53,55 @@ public class MoveBehaviour : GenericBehaviour
 
 		// Call the jump manager.
 		JumpManagement();
+
+		JumpPadManagement();
 	}
 
+	void JumpPadManagement()
+	{
+		// Start a new jump.
+		if (onJumpPad && !behaviourManager.GetAnim.GetBool(jumpBool) && behaviourManager.IsGrounded())
+		{
+			// Set jump related parameters.
+			behaviourManager.LockTempBehaviour(this.behaviourCode);
+			behaviourManager.GetAnim.SetBool(jumpBool, true);
+			// Is a locomotion jump?
+			if (behaviourManager.GetAnim.GetFloat(speedFloat) > 0.1)
+			{
+				// Temporarily change player friction to pass through obstacles.
+				GetComponent<CapsuleCollider>().material.dynamicFriction = 0f;
+				GetComponent<CapsuleCollider>().material.staticFriction = 0f;
+				// Remove vertical velocity to avoid "super jumps" on slope ends.
+				RemoveVerticalVelocity();
+				// Set jump vertical impulse velocity.
+				float velocity = 2f * Mathf.Abs(Physics.gravity.y) * jumpHeight;
+				velocity = Mathf.Sqrt(velocity);
+				behaviourManager.GetRigidBody.AddForce(Vector3.up * velocity * 2, ForceMode.VelocityChange);
+			}
+		}
+		// Is already jumping?
+		else if (behaviourManager.GetAnim.GetBool(jumpBool))
+		{
+			// Keep forward movement while in the air.
+			if (!behaviourManager.IsGrounded() && !isColliding && behaviourManager.GetTempLockStatus())
+			{
+				behaviourManager.GetRigidBody.AddForce(transform.forward * (jumpInertialForce * Physics.gravity.magnitude * sprintSpeed), ForceMode.Acceleration);
+			}
+			// Has landed?
+			if ((behaviourManager.GetRigidBody.velocity.y < 0) && behaviourManager.IsGrounded())
+			{
+				behaviourManager.GetAnim.SetBool(groundedBool, true);
+				// Change back player friction to default.
+				GetComponent<CapsuleCollider>().material.dynamicFriction = 0.6f;
+				GetComponent<CapsuleCollider>().material.staticFriction = 0.6f;
+				// Set jump related parameters.
+				jump = false;
+				behaviourManager.GetAnim.SetBool(jumpBool, false);
+				behaviourManager.UnlockTempBehaviour(this.behaviourCode);
+			}
+		}
+	}
+	
 	// Execute the idle and walk/run jump movements.
 	void JumpManagement()
 	{
@@ -184,5 +235,21 @@ public class MoveBehaviour : GenericBehaviour
 		isColliding = false;
 		GetComponent<CapsuleCollider>().material.dynamicFriction = 0.6f;
 		GetComponent<CapsuleCollider>().material.staticFriction = 0.6f;
+	}
+
+	private void OnTriggerEnter(Collider other)
+	{
+		if (other.gameObject.tag == "JumpPad")
+		{
+			onJumpPad = true;
+		}
+	}
+
+	private void OnTriggerExit(Collider other)
+	{
+		if (other.gameObject.tag == "JumpPad")
+		{
+			onJumpPad = false;
+		}
 	}
 }
